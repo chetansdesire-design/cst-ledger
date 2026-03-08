@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>URBAN CASA | Ledger</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root { --bg: #f8fafc; --panel: #ffffff; --primary: #334155; --accent: #4f46e5; --border: #e2e8f0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 30px; color: var(--primary); }
+        .nav { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+        .project-header { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin-bottom: 20px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px; }
+        .box { background: var(--panel); padding: 20px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+        .box h4 { margin: 0; color: #64748b; font-size: 0.75rem; text-transform: uppercase; }
+        .box div { font-size: 1.5rem; font-weight: 700; margin-top: 8px; }
+        .terms-box { background: #ffffff; padding: 15px; border-radius: 12px; border: 2px solid var(--accent); margin-bottom: 30px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+        .term-item h4 { margin: 0 0 5px 0; color: var(--accent); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+        .entry-form { background: var(--panel); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 30px; }
+        .form-row { display: grid; grid-template-columns: repeat(5, 1fr) auto; gap: 10px; align-items: center; }
+        input, select { padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; margin-top: 20px; }
+        th { background: #f1f5f9; padding: 15px; text-align: left; }
+        td { padding: 15px; border-top: 1px solid var(--border); }
+        .btn { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .chip { display: inline-flex; align-items: center; background: #e0e7ff; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; gap: 5px; margin: 2px; }
+        .chip button { border: none; background: none; cursor: pointer; font-size: 0.7rem; font-weight: bold; }
+        @media print { .nav, .entry-form, .btn, button, #settingsOverlay, select { display: none !important; } body { background: white; } }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <h2 style="margin: 0; flex-grow: 1;">URBAN CASA</h2>
+    <select id="filterSelect" onchange="updateFinancials()" style="width: 150px; border-color: var(--accent);"><option value="ALL">All Projects</option></select>
+    <button class="btn" style="background:#059669;" onclick="window.print()">🖨️ Print</button>
+    <button class="btn" onclick="document.getElementById('settingsOverlay').style.display='block'">⚙️ Settings</button>
+</div>
+
+<div id="projectHeader" class="project-header">All Projects</div>
+<div class="summary-grid">
+    <div class="box"><h4>Total Value (₹)</h4><div id="totalVal">0</div></div>
+    <div class="box"><h4>Total Received (₹)</h4><div id="totalRec">0</div></div>
+    <div class="box"><h4>Balance Due (₹)</h4><div id="balanceDue" style="color:#e11d48;">0</div></div>
+</div>
+
+<div id="termsArea" class="terms-box" style="display:none;">
+    <div class="term-item"><h4>Advance (10%)</h4><div id="t1">0</div></div>
+    <div class="term-item"><h4>Production (50%)</h4><div id="t2">0</div></div>
+    <div class="term-item"><h4>Arrival (30%)</h4><div id="t3">0</div></div>
+    <div class="term-item"><h4>Installation (10%)</h4><div id="t4">0</div></div>
+</div>
+
+<div class="entry-form">
+    <div class="form-row">
+        <input type="date" id="date">
+        <select id="projSelect"><option value="">Select Project</option></select>
+        <select id="desc"><option value="Advance Payment">Advance Payment</option><option value="Payment Received">Payment Received</option><option value="Final Payment">Final Payment</option></select>
+        <select id="mode"><option value="Cash">Cash</option><option value="Cheque">Cheque</option><option value="Online RTGS / NEFT">Online RTGS / NEFT</option><option value="UPI">UPI</option></select>
+        <input type="number" id="amt" placeholder="Amount">
+        <button class="btn" onclick="addEntry()">Add</button>
+    </div>
+</div>
+
+<table id="ledger">
+    <thead><tr><th>Date</th><th>Project</th><th>Description</th><th>Mode</th><th>Amount (₹)</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+</table>
+
+<div id="settingsOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:1000;">
+    <div style="background:white; width:500px; margin:50px auto; padding:25px; border-radius:12px;">
+        <h3>Project Configuration</h3>
+        <div style="display:grid; grid-template-columns: 2fr 1fr 100px; gap: 10px; margin-bottom: 20px;">
+            <input type="text" id="newProj" placeholder="Project Name">
+            <input type="number" id="newVal" placeholder="Total Value">
+            <button class="btn" onclick="addProject()">Add</button>
+        </div>
+        <div id="chipContainer" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+        <button onclick="document.getElementById('settingsOverlay').style.display='none'" style="margin-top:20px;">Close</button>
+    </div>
+</div>
+
+<script>
+    // Firebase Config - PLEASE REPLACE WITH YOUR OWN KEYS
+    const firebaseConfig = { databaseURL: "https://cst-ledger-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let projects = [];
+    
+    // Sync UI from Cloud
+    db.ref('ledgerData').on('value', (snap) => {
+        const data = snap.val();
+        if (data) {
+            projects = data.projects || [];
+            document.getElementById('ledger').querySelector('tbody').innerHTML = data.html || '';
+            renderProjects();
+            updateFinancials();
+        }
+    });
+
+    function saveToCloud() {
+        db.ref('ledgerData').set({
+            projects: projects,
+            html: document.getElementById('ledger').querySelector('tbody').innerHTML
+        });
+    }
+
+    function addProject() {
+        const name = document.getElementById('newProj').value, val = parseFloat(document.getElementById('newVal').value) || 0;
+        if (name) { projects.push({name, val}); document.getElementById('newProj').value = ''; document.getElementById('newVal').value = ''; renderProjects(); saveToCloud(); }
+    }
+
+    function renderProjects() {
+        const select = document.getElementById('projSelect'), filter = document.getElementById('filterSelect'), chips = document.getElementById('chipContainer');
+        select.innerHTML = '<option value="">Select Project</option>'; filter.innerHTML = '<option value="ALL">All Projects</option>'; chips.innerHTML = '';
+        projects.forEach((p, i) => {
+            select.innerHTML += `<option value="${p.name}">${p.name}</option>`; filter.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+            chips.innerHTML += `<div class="chip">${p.name} <button onclick="editVal(${i})">✎</button><button onclick="projects.splice(${i},1); renderProjects(); saveToCloud(); updateFinancials()">✕</button></div>`;
+        });
+    }
+
+    function editVal(i) { const v = prompt("New value:", projects[i].val); if(v) { projects[i].val = parseFloat(v); renderProjects(); saveToCloud(); updateFinancials(); } }
+    
+    function addEntry() {
+        const amt = parseFloat(document.getElementById('amt').value) || 0, proj = document.getElementById('projSelect').value;
+        if (!proj || amt <= 0) return alert("Select project and valid amount.");
+        const pObj = projects.find(p => p.name === proj), current = Array.from(document.querySelectorAll('.amt-cell')).filter(c => c.parentElement.cells[1].innerText === proj).reduce((s, c) => s + parseFloat(c.innerText), 0);
+        const status = pObj ? getStatus(current + amt, pObj.val) : { text: "Pending", color: "#64748b" };
+        const row = document.getElementById('ledger').querySelector('tbody').insertRow();
+        row.innerHTML = `<td>${document.getElementById('date').value}</td><td>${proj}</td><td>${document.getElementById('desc').value}</td><td>${document.getElementById('mode').value}</td><td class="amt-cell">${amt}</td><td><span class="status-badge" style="background:${status.color}33; color:${status.color}">${status.text}</span></td>`;
+        document.getElementById('amt').value = '';
+        saveToCloud();
+        updateFinancials();
+    }
+
+    function getStatus(r, t) {
+        const p = (r / t) * 100;
+        if (p >= 100) return { text: "Settled", color: "#10b981" };
+        if (p >= 90) return { text: "Installation", color: "#8b5cf6" };
+        if (p >= 60) return { text: "Material Arrival", color: "#f59e0b" };
+        if (p >= 10) return { text: "Production", color: "#3b82f6" };
+        return { text: "Advance", color: "#eab308" };
+    }
+
+    function updateFinancials() {
+        const filter = document.getElementById('filterSelect').value;
+        document.getElementById('projectHeader').innerText = filter === "ALL" ? "All Projects" : filter;
+        let sum = 0;
+        Array.from(document.getElementById('ledger').querySelector('tbody').rows).forEach(r => {
+            const m = (filter === "ALL" || r.cells[1].innerText === filter); r.style.display = m ? "" : "none";
+            if (m) sum += parseFloat(r.cells[4].innerText) || 0;
+        });
+        const active = projects.find(p => p.name === filter);
+        const val = active ? active.val : (filter === "ALL" ? projects.reduce((a, b) => a + b.val, 0) : 0);
+        document.getElementById('totalVal').innerText = val.toLocaleString('en-IN');
+        document.getElementById('totalRec').innerText = sum.toLocaleString('en-IN');
+        document.getElementById('balanceDue').innerText = (val - sum).toLocaleString('en-IN');
+        document.getElementById('termsArea').style.display = active ? 'grid' : 'none';
+        if(active) ['t1', 't2', 't3', 't4'].forEach((id, i) => document.getElementById(id).innerText = (val * [0.1, 0.5, 0.3, 0.1][i]).toFixed(0));
+    }
+</script>
+</body>
+</html>
