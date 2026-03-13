@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>URBAN CASA | Ledger v3.4</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root { --bg: #f1f5f9; --panel: #ffffff; --primary: #1e293b; --accent: #4f46e5; --border: #cbd5e1; --danger: #ef4444; --success: #10b981; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 20px; color: var(--primary); }
+        
+        .nav { display: flex; gap: 12px; align-items: center; background: white; padding: 12px 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .nav h2 { margin: 0; flex-grow: 1; font-size: 1.4rem; letter-spacing: -1px; }
+        .nav-controls { display: flex; align-items: center; gap: 8px; }
+        
+        .search-mini { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; width: 180px; font-size: 0.85rem; }
+        .project-select { padding: 8px; border: 2px solid var(--accent); border-radius: 6px; font-weight: 600; width: 160px; }
+
+        #mainContent { display: none; } 
+        #loginScreen { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 70vh; text-align: center; }
+
+        .project-header-container { margin: 10px 0 25px 5px; }
+        .project-header { font-size: 1.8rem; font-weight: 800; color: var(--accent); margin: 0; }
+        .version-tag { font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
+        .box { background: var(--panel); padding: 20px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+        .box h4 { margin: 0; color: #64748b; font-size: 0.7rem; text-transform: uppercase; }
+        .box div { font-size: 1.6rem; font-weight: 800; margin-top: 8px; }
+
+        .terms-box { background: #eef2ff; padding: 15px; border-radius: 12px; border: 1px solid var(--accent); margin-bottom: 25px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+        .entry-form { background: var(--panel); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 30px; }
+        .form-row { display: grid; grid-template-columns: 140px 1fr 1fr 140px 140px 100px; gap: 10px; align-items: center; }
+        input, select { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+        
+        table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 12px; overflow: hidden; }
+        th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.75rem; text-transform: uppercase; color: #64748b; }
+        td { padding: 14px 15px; border-top: 1px solid #f1f5f9; font-size: 0.9rem; }
+        
+        .btn { background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-danger { background: var(--danger); }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
+        .x-btn { color: var(--danger); border: 1px solid #fee2e2; background: #fef2f2; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: bold; }
+        
+        @media print { 
+            .nav, .entry-form, .btn, .x-btn, #settingsOverlay { display: none !important; } 
+            #mainContent { display: block !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <h2>URBAN CASA <span style="font-size: 0.8rem; opacity: 0.4;">v3.4</span></h2>
+    <div id="authControls" class="nav-controls" style="display:none;">
+        <input type="text" id="ledgerSearch" onkeyup="updateFinancials()" placeholder="🔍 Search Details..." class="search-mini">
+        <select id="filterSelect" onchange="updateFinancials()" class="project-select"><option value="ALL">All Accounts</option></select>
+        <button class="btn" style="background:#059669;" onclick="window.print()">Print</button>
+        <button class="btn" onclick="document.getElementById('settingsOverlay').style.display='block'">Settings</button>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
+    <button id="loginBtnNav" class="btn" onclick="login()">Login</button>
+</div>
+
+<div id="loginScreen">
+    <h1 style="color: var(--accent); margin-bottom: 5px;">Secure Ledger</h1>
+    <p style="color: #64748b; margin-bottom: 20px;">v3.4 Production Build</p>
+    <button class="btn" style="padding: 15px 40px; font-size: 1rem;" onclick="login()">Unlock Ledger</button>
+</div>
+
+<div id="mainContent">
+    <div class="project-header-container">
+        <h1 id="projectHeader" class="project-header">All Accounts</h1>
+        <div class="version-tag">SYSTEM VERSION: 3.4.0-STABLE</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="box"><h4>Account Value</h4><div id="totalVal">₹0</div></div>
+        <div class="box"><h4>Received</h4><div id="totalRec" style="color:var(--success);">₹0</div></div>
+        <div class="box"><h4>Pending</h4><div id="balanceDue" style="color:var(--danger);">₹0</div></div>
+    </div>
+
+    <div id="termsArea" class="terms-box" style="display:none;">
+        <div class="term-item"><h4>Advance (10%)</h4><div id="t1">0</div></div>
+        <div class="term-item"><h4>Production (50%)</h4><div id="t2">0</div></div>
+        <div class="term-item"><h4>Arrival (30%)</h4><div id="t3">0</div></div>
+        <div class="term-item"><h4>Installation (10%)</h4><div id="t4">0</div></div>
+    </div>
+
+    <div class="entry-form">
+        <div class="form-row">
+            <input type="date" id="date">
+            <select id="projSelect"><option value="">Select Project</option></select>
+            <select id="desc">
+                <option value="Advance Payment">Advance Payment</option>
+                <option value="Payment Received">Payment Received</option>
+                <option value="Final Payment">Final Payment</option>
+            </select>
+            <select id="mode">
+                <option value="Cash">Cash</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Online RTGS / NEFT">Online RTGS / NEFT</option>
+                <option value="UPI">UPI</option>
+            </select>
+            <input type="number" id="amt" placeholder="Amount">
+            <button class="btn" onclick="addEntry()">Add</button>
+        </div>
+    </div>
+
+    <table id="ledger">
+        <thead><tr><th>Date</th><th>Project</th><th>Description</th><th>Mode</th><th>Amount (₹)</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<div id="settingsOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; backdrop-filter: blur(2px);">
+    <div style="background:white; width:500px; margin:60px auto; padding:25px; border-radius:12px;">
+        <h3>Configuration</h3>
+        <div style="display:grid; grid-template-columns: 2fr 1fr 80px; gap: 8px; margin-bottom: 15px;">
+            <input type="text" id="newProj" placeholder="Project Name"><input type="number" id="newVal" placeholder="Value"><button class="btn" onclick="withAuth(addProject)">Add</button>
+        </div>
+        <div id="chipContainer" style="display:flex; flex-wrap:wrap; gap:8px; max-height:150px; overflow-y:auto; padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:15px;"></div>
+        <div style="background:#f8fafc; padding:12px; border-radius:8px;">
+            <h4 style="margin:0 0 8px 0; font-size:0.7rem; color:#64748b;">Admin Password</h4>
+            <div style="display:flex; gap:8px;"><input type="password" id="newPass" placeholder="New Password" style="flex-grow:1;"><button class="btn" style="background:#64748b;" onclick="updatePassword()">Update</button></div>
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:space-between;"><button class="btn btn-danger" onclick="withAuth(clearLedger)">Reset Ledger</button><button onclick="document.getElementById('settingsOverlay').style.display='none'" style="padding:10px 20px; border:none; background:none; cursor:pointer;">Close</button></div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = { databaseURL: "https://cst-ledger-default-rtdb.firebaseio.com/" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    let projects = [], ledgerEntries = [], adminPassword = "123", isLoggedIn = false;
+
+    document.getElementById('date').valueAsDate = new Date();
+
+    db.ref('ledgerData').on('value', (snap) => {
+        const data = snap.val();
+        if (data) {
+            projects = data.projects || [];
+            ledgerEntries = data.ledgerEntries || [];
+            adminPassword = data.password || "123";
+            if(isLoggedIn) renderUI();
+        }
+    });
+
+    function login() {
+        const pass = prompt("Enter Admin Password:");
+        if (pass === adminPassword) {
+            isLoggedIn = true;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            document.getElementById('authControls').style.display = 'flex';
+            document.getElementById('loginBtnNav').style.display = 'none';
+            renderUI();
+        } else if (pass !== null) alert("Access Denied.");
+    }
+
+    function logout() {
+        isLoggedIn = false;
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'none';
+        document.getElementById('authControls').style.display = 'none';
+        document.getElementById('loginBtnNav').style.display = 'block';
+    }
+
+    function saveToCloud() { db.ref('ledgerData').set({ projects, ledgerEntries, password: adminPassword }); }
+    function withAuth(action) { if(isLoggedIn) action(); else login(); }
+
+    function updatePassword() {
+        const current = prompt("Current Password:");
+        if (current !== adminPassword) return alert("Unauthorized.");
+        const newP = document.getElementById('newPass').value;
+        if (newP.length < 3) return alert("Too short.");
+        adminPassword = newP; saveToCloud(); alert("Password Updated!");
+    }
+
+    function addProject() {
+        const name = document.getElementById('newProj').value.trim(), val = parseFloat(document.getElementById('newVal').value) || 0;
+        if (name && val > 0) { projects.push({name, val}); saveToCloud(); document.getElementById('newProj').value = ''; document.getElementById('newVal').value = ''; }
+    }
+
+    function renderUI() {
+        const select = document.getElementById('projSelect'), filter = document.getElementById('filterSelect'), chips = document.getElementById('chipContainer');
+        const currentFilter = filter.value;
+        select.innerHTML = '<option value="">Select Project</option>'; filter.innerHTML = '<option value="ALL">All Accounts</option>'; chips.innerHTML = '';
+        projects.forEach((p, i) => {
+            select.innerHTML += `<option value="${p.name}">${p.name}</option>`; filter.innerHTML += `<option value="${p.name}">${p.name}</option>`;
+            chips.innerHTML += `<div class="chip"><span>${p.name}</span><button onclick="const v = prompt('Value:', ${p.val}); if(v){projects[${i}].val=parseFloat(v); saveToCloud();}">✎</button><button onclick="projects.splice(${i},1); saveToCloud();">×</button></div>`;
+        });
+        filter.value = currentFilter; updateFinancials();
+    }
+
+    function addEntry() {
+        const date = document.getElementById('date').value, proj = document.getElementById('projSelect').value, amt = parseFloat(document.getElementById('amt').value) || 0;
+        if (!proj || amt <= 0) return alert("Invalid entry.");
+        ledgerEntries.push({ date, proj, desc: document.getElementById('desc').value, mode: document.getElementById('mode').value, amt: Number(amt) });
+        document.getElementById('amt').value = ''; saveToCloud();
+    }
+
+    function deleteRow(index) { if(confirm("Delete entry?")){ledgerEntries.splice(index, 1); saveToCloud();} }
+    function clearLedger() { if (confirm("Clear all data?")) { ledgerEntries = []; saveToCloud(); } }
+
+    function updateFinancials() {
+        const filter = document.getElementById('filterSelect').value, search = document.getElementById('ledgerSearch').value.toLowerCase();
+        const tbody = document.querySelector('#ledger tbody');
+        tbody.innerHTML = '';
+        document.getElementById('projectHeader').innerText = filter === "ALL" ? (search ? "Search Results" : "All Accounts") : filter;
+        
+        let totalReceivedSum = 0, visibleProjects = new Set(), runningTotals = {}; 
+
+        ledgerEntries.forEach((entry, index) => {
+            runningTotals[entry.proj] = (runningTotals[entry.proj] || 0) + Number(entry.amt);
+            const matchesFilter = (filter === "ALL" || entry.proj === filter);
+            const matchesSearch = entry.proj.toLowerCase().includes(search) || entry.desc.toLowerCase().includes(search) || entry.mode.toLowerCase().includes(search);
+
+            if (matchesFilter && matchesSearch) {
+                visibleProjects.add(entry.proj);
+                const pObj = projects.find(p => p.name === entry.proj);
+                const progress = pObj ? (runningTotals[entry.proj] / pObj.val) * 100 : 0;
+                let status = { text: "Advance", color: "#eab308" };
+                if (progress >= 100) status = { text: "Settled", color: "#10b981" };
+                else if (progress >= 60) status = { text: "Arrival", color: "#f59e0b" };
+                else if (progress >= 10) status = { text: "Prod.", color: "#3b82f6" };
+
+                const row = tbody.insertRow();
+                row.innerHTML = `<td>${entry.date}</td><td><strong>${entry.proj}</strong></td><td>${entry.desc}</td><td>${entry.mode}</td><td><strong>₹${Number(entry.amt).toLocaleString('en-IN')}</strong></td><td><span class="status-badge" style="background:${status.color}22; color:${status.color}">${status.text}</span></td><td style="text-align:center;"><button class="x-btn" onclick="deleteRow(${index})">×</button></td>`;
+                totalReceivedSum += Number(entry.amt);
+            }
+        });
+
+        let dynamicTotalVal = 0;
+        if (filter !== "ALL") { dynamicTotalVal = projects.find(p => p.name === filter)?.val || 0; } 
+        else { projects.forEach(p => { if(visibleProjects.has(p.name)) dynamicTotalVal += p.val; }); }
+
+        document.getElementById('totalVal').innerText = "₹" + dynamicTotalVal.toLocaleString('en-IN');
+        document.getElementById('totalRec').innerText = "₹" + totalReceivedSum.toLocaleString('en-IN');
+        document.getElementById('balanceDue').innerText = "₹" + (dynamicTotalVal - totalReceivedSum).toLocaleString('en-IN');
+
+        const active = projects.find(p => p.name === filter);
+        const termsArea = document.getElementById('termsArea');
+        if(active && filter !== "ALL") {
+            termsArea.style.display = 'grid';
+            ['t1','t2','t3','t4'].forEach((id, i) => document.getElementById(id).innerText = "₹" + Math.round(dynamicTotalVal * [0.1, 0.5, 0.3, 0.1][i]).toLocaleString('en-IN'));
+        } else { termsArea.style.display = 'none'; }
+    }
+</script>
+</body>
+</html>
